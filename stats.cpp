@@ -35,3 +35,8 @@ double stats::variance()
   double avg = this->average();
   return counter < 2 ? -1 : sqrt(sum2/counter - avg*avg);
 }
+
+double stats::ops()
+{
+  return sum > 0.0 ? counter*1000000.0/sum : 0.0;
+}

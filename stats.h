@@ -7,6 +7,7 @@ class stats
     double average();
     double maxvalue();
     double variance();
+    double ops();
 
   private:
     double sum;

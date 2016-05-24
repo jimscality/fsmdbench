@@ -21,16 +21,17 @@ void handle_one(int op, timed_task *task, std::vector<std::string>& names, stats
         }
       if (data_file.is_open())
         {
-          data_file << "op " << std::to_string(op) << " status " << result.status_code << " in " << result.duration << "(microsec) on " << dn << std::endl;
+          data_file << "op " << get_op_name(op) << " status " << result.status_code << " in " << result.duration << "(microsec) on " << dn << std::endl;
         }
     }
 }
 
 void print_summary(int op, std::string object_type, stats& data)
 {
-  std::cout << "op " << std::to_string(op) << " on " << object_type << " result: average " << std::to_string(data.average()) <<
+  std::cout << "op " << get_op_name(op) << " on " << object_type << " result: average " << std::to_string(data.average()) <<
             "(microsec), variance " << std::to_string(data.variance()) << "(microsec), maximum " <<
-            std::to_string(data.maxvalue()) << "(microsec)" << std::endl;
+            std::to_string(data.maxvalue()) << "(microsec) ops " << 
+            std::to_string(data.ops()) << "(ops/sec)" << std::endl;
 }
 
 int measure_op(int op, std::vector<name_set> *nameset, int initial_level, int incr, int nlevel, dir_op *dop, file_op *fop, barrier *door, std::ofstream& data_file)
