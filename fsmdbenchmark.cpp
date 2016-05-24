@@ -1,5 +1,6 @@
 #include <string>
 #include <iostream>
+#include <fstream>
 #include "dirops.h"
 #include "fileops.h"
 #include "barrier.h"
@@ -8,7 +9,7 @@
 #include "processopts.h"
 #include "stats.h"
 
-void handle_one(int op, timed_task *task, std::vector<std::string>& names, stats *data_handler)
+void handle_one(int op, timed_task *task, std::vector<std::string>& names, stats *data_handler, std::ofstream *data_file)
 {
   task_result result;
   for (auto& dn : names)
@@ -18,11 +19,21 @@ void handle_one(int op, timed_task *task, std::vector<std::string>& names, stats
         {
           data_handler->process((double)result.duration);
         }
-      std::cout << "op " << std::to_string(op) << " status " << result.status_code << " in " << result.duration << "(microsec) on " << dn << std::endl;
+      if (NULL != data_file)
+        {
+          (*data_file) << "op " << std::to_string(op) << " status " << result.status_code << " in " << result.duration << "(microsec) on " << dn << std::endl;
+        }
     }
 }
 
-int measure_op(int op, std::vector<name_set> *nameset, int initial_level, int incr, int nlevel, dir_op *dop, file_op *fop, barrier *door)
+void print_summary(int op, std::string object_type, stats& data)
+{
+  std::cout << "op " << std::to_string(op) << " on " << object_type << " result: average " << std::to_string(data.average()) <<
+            "(microsec), variance " << std::to_string(data.variance()) << "(microsec), maximum " <<
+            std::to_string(data.maxvalue()) << "(microsec)" << std::endl;
+}
+
+int measure_op(int op, std::vector<name_set> *nameset, int initial_level, int incr, int nlevel, dir_op *dop, file_op *fop, barrier *door, std::ofstream *data_file)
 {
   stats data_d;
   stats data_f;
@@ -30,27 +41,39 @@ int measure_op(int op, std::vector<name_set> *nameset, int initial_level, int in
   data_f.reset();
   for (int l = initial_level; l >= 0 && l < nlevel; l += incr)
     {
-      handle_one(op, dop, (*nameset)[l].get_dir_names(), &data_d);
-      handle_one(op, fop, (*nameset)[l].get_file_names(), &data_f);
+      handle_one(op, dop, (*nameset)[l].get_dir_names(), &data_d, data_file);
+      handle_one(op, fop, (*nameset)[l].get_file_names(), &data_f, data_file);
 
-      std::cout << ">>>>>notify and wait for all clients<<<<<" << std::endl;
+      if (NULL != data_file)
+        {
+          (*data_file) << ">>>>>notify and wait for all clients<<<<<" << std::endl;
+        }
       if (0 != door->notify())
         {
           return -1;
         }
       door->check();
     }
-  std::cout << "op " << std::to_string(op) << " on directories result: average " << std::to_string(data_d.average()) << ", variance " << std::to_string(data_d.variance()) << ", maximum " << std::to_string(data_d.maxvalue()) << std::endl;
-  std::cout << "op " << std::to_string(op) << " on files result: average " << std::to_string(data_f.average()) << ", variance " << std::to_string(data_f.variance()) << ", maximum " << std::to_string(data_f.maxvalue()) << std::endl;
+
+  print_summary(op, std::string("directories"), data_d);
+  print_summary(op, std::string("files"), data_f);
   return 0;
 }
 
-void fsmetadatabenchmark(std::string top, int nlevel, int client_index, std::vector<std::string> *addresses, int dirs_per_client, int files_per_client)
+void fsmetadatabenchmark(std::string top, int nlevel, int client_index, std::vector<std::string> *addresses, int dirs_per_client, int files_per_client, std::string& data_output)
 {
   barrier door(client_index, 12420, addresses);
 
   dir_op dop;
   file_op fop;
+
+  std::ofstream data_file_stream;
+  std::ofstream *data_file = NULL;
+  data_file_stream.open(data_output);
+  if (data_file_stream.is_open())
+    {
+      data_file = &data_file_stream;
+    }
 
   name_generator namegen1(top, std::string("d"), std::string("f"), client_index, addresses->size(), nlevel, dirs_per_client, files_per_client);
   std::vector<name_set> nameset(nlevel);
@@ -61,9 +84,14 @@ void fsmetadatabenchmark(std::string top, int nlevel, int client_index, std::vec
           return;
         }
     }
-  measure_op(CREATE, &nameset, 0, 1, nlevel, &dop, &fop, &door);
-  measure_op(UPDATE, &nameset, 0, 1, nlevel, &dop, &fop, &door);
-  measure_op(DELETE, &nameset, nlevel-1, -1, nlevel, &dop, &fop, &door);
+  measure_op(CREATE, &nameset, 0, 1, nlevel, &dop, &fop, &door, data_file);
+  measure_op(UPDATE, &nameset, 0, 1, nlevel, &dop, &fop, &door, data_file);
+  measure_op(DELETE, &nameset, nlevel-1, -1, nlevel, &dop, &fop, &door, data_file);
+
+  if (data_file_stream.is_open())
+    {
+      data_file_stream.close();
+    }
 }
 
 int main(int argc, char* argv[])
@@ -74,12 +102,14 @@ int main(int argc, char* argv[])
   int levels;
   int num_dirs;
   int num_files;
+  std::string data_output;
 
-  if (0 != process_opts(argc, argv, addresses, client_index, target_dir, levels, num_dirs, num_files))
+  if (0 != process_opts(argc, argv, addresses, client_index, target_dir, levels, num_dirs, num_files, data_output))
     {
       return 1;
     }
 
-  fsmetadatabenchmark(target_dir, levels, client_index, &addresses, num_dirs, num_files);
+  fsmetadatabenchmark(target_dir, levels, client_index, &addresses, num_dirs, num_files, data_output);
+
   return 0;
 }

@@ -11,7 +11,7 @@ print_usage()
 }
 
 int
-process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& client_index, std::string& target_dir, int& levels, int& num_dirs, int& num_files)
+process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& client_index, std::string& target_dir, int& levels, int& num_dirs, int& num_files, std::string& data_output)
 {
   // some default values
   levels = 2;
@@ -19,7 +19,7 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& cl
   num_dirs = 5;
   num_files = 3;
   int c;
-  while (-1 != (c = getopt(argc, argv, "a:c:t:l:d:f:h")))
+  while (-1 != (c = getopt(argc, argv, "a:c:t:l:d:f:o:h")))
     {
       switch(c)
         {
@@ -48,6 +48,9 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& cl
             break;
           case 'f':
             num_dirs = std::stoi(std::string(optarg));
+            break;
+          case 'o':
+            data_output = optarg;
             break;
           case 'h':
           case '?':
