@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <iostream>
+#include <arpa/inet.h>
 #include "barrier.h"
 #include "log.h"
 
@@ -188,6 +189,8 @@ int barrier::notify()
             {
               close(s);
               perror("unable to connect");
+              char buf[256];
+              std::cerr << "errno " << std::to_string(errno) << " peer " << inet_ntop(AF_INET, &peer, buf, 256) << std::endl;
               return -1;
             }
         }
