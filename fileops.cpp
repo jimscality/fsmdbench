@@ -24,6 +24,14 @@ file_op::do_task(int type, std::string *pathname)
             }
           return 0;
         }
+      case DELETE:
+        {
+          if (-1 == unlink(pathname->c_str()))
+            {
+              return errno;
+            }
+          return 0;
+        }
       default:
         {
           assert(0);

@@ -6,7 +6,8 @@
 
 enum {
   CREATE,
-  UPDATE
+  UPDATE,
+  DELETE,
 };
 
 class timed_task {
