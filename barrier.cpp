@@ -39,7 +39,7 @@ barrier::barrier(int c, int sp, std::vector<std::string> *addresses) : client(c)
         {
           throw std::exception();
         }
-      assert(sizeof(struct sockaddr_in) == myaddrinfo->ai_addrlen);
+      assert(sizeof(struct sockaddr_in) == peerinfo->ai_addrlen);
       struct sockaddr_in peeraddr;
       memcpy(&peeraddr, peerinfo->ai_addr, sizeof(struct sockaddr_in));
       peer_addresses.push_back(peeraddr);
@@ -179,7 +179,7 @@ int barrier::notify()
         }
       while (-1 == connect(s, (struct sockaddr*)&peer, sizeof(struct sockaddr_in)))
         {
-          if (ECONNREFUSED == errno)
+          if (ECONNREFUSED == errno || EADDRNOTAVAIL == errno)
             {
               std::string msg = std::string("retry connect to ") + std::to_string(s);
               logger::inst().log(&msg);
@@ -189,8 +189,8 @@ int barrier::notify()
             {
               close(s);
               perror("unable to connect");
-              char buf[256];
-              std::cerr << "errno " << std::to_string(errno) << " peer " << inet_ntop(AF_INET, &peer, buf, 256) << std::endl;
+              char buf[INET_ADDRSTRLEN];
+              std::cerr << "errno " << std::to_string(errno) << " peer " << inet_ntop(AF_INET, &peer.sin_addr, buf, INET_ADDRSTRLEN) << ":" << std::to_string(ntohs(peer.sin_port)) << std::endl;
               return -1;
             }
         }

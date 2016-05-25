@@ -28,10 +28,13 @@ void handle_one(int op, timed_task *task, std::vector<std::string>& names, stats
 
 void print_summary(int op, std::string object_type, stats& data)
 {
-  std::cout << "op " << get_op_name(op) << " on " << object_type << " result: average " << std::to_string(data.average()) <<
-            "(microsec), variance " << std::to_string(data.variance()) << "(microsec), maximum " <<
-            std::to_string(data.maxvalue()) << "(microsec) ops " << 
-            std::to_string(data.ops()) << "(ops/sec)" << std::endl;
+  std::cout << "op " << get_op_name(op) << " on " << object_type << " result:" << std::endl
+            << "   operations (ops/s): " << std::to_string(data.ops()) << std::endl
+            << "   latency (micro sec) " << std::endl
+            << "              average: " << std::to_string(data.average()) << std::endl
+            << "             variance: " << std::to_string(data.variance()) << std::endl
+            << "              maximum: " << std::to_string(data.maxvalue()) << std::endl
+            << std::endl;
 }
 
 int measure_op(int op, std::vector<name_set> *nameset, int initial_level, int incr, int nlevel, dir_op *dop, file_op *fop, barrier *door, std::ofstream& data_file)
@@ -80,6 +83,8 @@ void fsmetadatabenchmark(std::string top, int nlevel, int client_index, std::vec
           return;
         }
     }
+
+  std::cout << std::endl;
   measure_op(CREATE, &nameset, 0, 1, nlevel, &dop, &fop, &door, data_file);
   measure_op(UPDATE, &nameset, 0, 1, nlevel, &dop, &fop, &door, data_file);
   measure_op(DELETE, &nameset, nlevel-1, -1, nlevel, &dop, &fop, &door, data_file);

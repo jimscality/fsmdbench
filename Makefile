@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS = -std=c++11 -pthread
+CFLAGS = -std=c++11 -pthread -g -O
 LFLAGS = -lm
 
 DEPS=barrier.h dirops.h fileops.h namegen.h nameset.h ops.h processopts.h taskresult.h log.h stats.h
