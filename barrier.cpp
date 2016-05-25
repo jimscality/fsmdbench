@@ -87,6 +87,8 @@ barrier::~barrier()
   close(monitor_socket);
   pthread_mutex_destroy(&monitor_lock);
   pthread_cond_destroy(&monitor_cond);
+  pthread_cancel(monitor_thread);
+  pthread_join(monitor_thread, NULL);
 }
 
 void* barrier::monitor(void *param)
