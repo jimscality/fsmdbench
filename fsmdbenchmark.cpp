@@ -29,7 +29,7 @@ void handle_one(int op, timed_task *task, std::vector<std::string>& names, stats
 void print_summary(int op, std::string object_type, stats& data)
 {
   std::cout << "op " << get_op_name(op) << " on " << object_type << " result:" << std::endl
-            << "   operations (ops/s): " << std::to_string(data.ops()) << std::endl
+            << "   throughput(ops/s): " << std::to_string(data.ops()) << std::endl
             << "   latency (micro sec) " << std::endl
             << "              average: " << std::to_string(data.average()) << std::endl
             << "             variance: " << std::to_string(data.variance()) << std::endl
