@@ -1,6 +1,9 @@
 #include <unordered_set>
 #include <netinet/in.h>
 #include <vector>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #ifndef __BARRIER_H
 #define __BARRIER_H
@@ -8,30 +11,30 @@
 class barrier
 {
   public:
-    barrier(int c, int sp, std::vector<std::string> *addresses);
+    barrier(const int num_barriers, const int sp, const int thread_clients, const std::vector<std::string> *remote_addresses);
     virtual ~barrier();
 
-    void check();
-    int notify();
+    int notify_and_wait(const int barrier_id, const int reset_barrier_id = 0);
+
+    std::vector<struct sockaddr_in> get_remote_addresses();
 
   private:
-    static void* monitor(void *param);
+    static void monitor(barrier * const bp);
+    void local_notify(int barrier_id);
+    int remote_notify(int barrier_id);
+    static int send_data(struct sockaddr_in& remote, int data);
+    static void get_addr(struct addrinfo& hint, const char *addr, const char *port, struct sockaddr_in& sockipaddr);
+    static int id_to_index(int barrier_id);
 
-    int client;
-    int nclient;
     int start_port;
-
+    int nclient;
+    std::vector<int> barrier_ids;
     std::vector<struct sockaddr_in> peer_addresses;
     struct sockaddr_in my_local_addr;
     int monitor_socket;
-    pthread_t monitor_thread;
-    pthread_mutex_t monitor_lock;
-    pthread_cond_t monitor_cond;
-    volatile bool level_done;
-    std::unordered_set<int> *current_set;
-    std::unordered_set<int> *next_set;
-    std::unordered_set<int> seta;
-    std::unordered_set<int> setb;
+    std::mutex monitor_lock;
+    std::condition_variable monitor_cond;
+    std::thread monitor_thread;
 };
 
 #endif

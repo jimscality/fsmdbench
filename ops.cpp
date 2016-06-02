@@ -23,7 +23,7 @@ std::string& get_op_name(int op)
       static std::string update_str("UPDATE");
       return update_str;
     case DELETE:
-      static std::string delete_str("DELEATE");
+      static std::string delete_str("DELETE");
       return delete_str;
     default:
       assert(0);

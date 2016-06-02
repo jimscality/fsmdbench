@@ -76,3 +76,10 @@ target directory |
 Note that file system operations from different clients are in the same parent directories.
 The program ensures that clients from different servers operate collaboratively so that
 parent directories always exist.
+
+Usage examples
+
+mkdir -p /tmp/bench
+fsmdbench -t /tmp/bench
+
+fsmdbench -t /tmp/bench -c 3 -a 192.168.1.10,192.168.1.11 -l 10 -d 5 -f 10

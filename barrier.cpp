@@ -6,44 +6,30 @@
 #include <unistd.h>
 #include <iostream>
 #include <arpa/inet.h>
+#include <signal.h>
 #include "barrier.h"
 #include "log.h"
 
-barrier::barrier(int c, int sp, std::vector<std::string> *addresses) : client(c), start_port(sp)
+barrier::barrier(const int num_barriers, const int sp, const int thread_clients, const std::vector<std::string> *remote_addresses) : start_port(sp)
 {
-  nclient = addresses->size();
-  monitor_lock = PTHREAD_MUTEX_INITIALIZER;
-  monitor_cond = PTHREAD_COND_INITIALIZER;
-  level_done = false;
-  current_set = &seta;
-  next_set = &setb;
+  nclient = thread_clients * remote_addresses->size();
+  for (int i = 0; i < num_barriers; i++)
+    {
+      barrier_ids.push_back(0);
+    }
 
   struct addrinfo hints;
   memset(&hints, 0x0, sizeof hints);
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
 
-  struct addrinfo *myaddrinfo;
-  if (0 != getaddrinfo(addresses->at(c).c_str(), std::to_string(start_port + nclient + client).c_str(), &hints, &myaddrinfo))
-    {
-      throw std::exception();
-    }
-  assert(sizeof(struct sockaddr_in) == myaddrinfo->ai_addrlen);
-  memcpy(&my_local_addr, myaddrinfo->ai_addr, sizeof(struct sockaddr_in));
-  freeaddrinfo(myaddrinfo);
+  barrier::get_addr(hints, "127.0.0.1", std::to_string(start_port).c_str(), my_local_addr);
 
-  for (int i = 0; i < nclient; i++)
+  for (int i = 0; i < remote_addresses->size(); i++)
     {
-      struct addrinfo *peerinfo;
-      if (0 != getaddrinfo(addresses->at(i).c_str(), std::to_string(start_port + i).c_str(), &hints, &peerinfo))
-        {
-          throw std::exception();
-        }
-      assert(sizeof(struct sockaddr_in) == peerinfo->ai_addrlen);
       struct sockaddr_in peeraddr;
-      memcpy(&peeraddr, peerinfo->ai_addr, sizeof(struct sockaddr_in));
+      barrier::get_addr(hints, remote_addresses->at(i).c_str(), std::to_string(start_port).c_str(), peeraddr);
       peer_addresses.push_back(peeraddr);
-      freeaddrinfo(peerinfo);
     }
 
   if (-1 == (monitor_socket = socket(AF_INET, SOCK_STREAM, 0)))
@@ -62,13 +48,9 @@ barrier::barrier(int c, int sp, std::vector<std::string> *addresses) : client(c)
   hints.ai_flags = AI_PASSIVE;
   struct addrinfo *bindaddrinfo;
   struct sockaddr_in bindaddr;
-  if (0 != getaddrinfo(NULL, std::to_string(start_port + client).c_str(), &hints, &bindaddrinfo))
-    {
-      throw std::exception();
-    }
-  assert(sizeof(struct sockaddr_in) == bindaddrinfo->ai_addrlen);
-  memcpy(&bindaddr, bindaddrinfo->ai_addr, sizeof(struct sockaddr_in));
-  freeaddrinfo(bindaddrinfo);
+
+  barrier::get_addr(hints, NULL, std::to_string(start_port).c_str(), bindaddr);
+
   if (-1 == bind(monitor_socket, (struct sockaddr*)&bindaddr, sizeof(struct sockaddr_in)))
     {
       close(monitor_socket);
@@ -76,30 +58,22 @@ barrier::barrier(int c, int sp, std::vector<std::string> *addresses) : client(c)
       throw std::exception();
     }
 
-  if (0 != pthread_create(&monitor_thread, NULL, barrier::monitor, this))
-    {
-      throw std::exception();
-    }
+  monitor_thread = std::thread(barrier::monitor, this);
 }
 
 barrier::~barrier()
 {
+  barrier::send_data(my_local_addr, -1);
   close(monitor_socket);
-  pthread_mutex_destroy(&monitor_lock);
-  pthread_cond_destroy(&monitor_cond);
-  pthread_cancel(monitor_thread);
-  pthread_join(monitor_thread, NULL);
+  monitor_thread.join();
 }
 
-void* barrier::monitor(void *param)
+void barrier::monitor(barrier * const bp)
 {
-  barrier *bp = (barrier*)param;
-
   if (-1 == listen(bp->monitor_socket, bp->nclient))
     {
-      close(bp->monitor_socket);
       perror("unable to listen on monitor socket");
-      return (void*)-1;
+      return;
     }
 
   while (1)
@@ -109,96 +83,122 @@ void* barrier::monitor(void *param)
       socklen_t addr_len = sizeof(struct sockaddr_in);
       if (-1 == (s = accept(bp->monitor_socket, (struct sockaddr*)&peer_addr, &addr_len)))
         {
-          close(bp->monitor_socket);
-          perror("unable to accept on monitor socket");
-          return (void*)-1;
+          std::cout << "accept error" << std::endl;
+          return;
         }
+      int id;
+      int n = recv(s, &id, sizeof(int), 0);
+      int barrier_id = ntohs(id);
       close(s);
-      pthread_mutex_lock(&bp->monitor_lock);
-      if (0 == bp->current_set->count(peer_addr.sin_port))
+
+      if (barrier_id >= 1 && barrier_id <= bp->barrier_ids.size())
         {
-          bp->current_set->insert(peer_addr.sin_port);
-        }
-      else if (0 == bp->next_set->count(peer_addr.sin_port))
-        {
-          bp->next_set->insert(peer_addr.sin_port);
+          bp->local_notify(barrier_id);
         }
       else
         {
-          assert(0);
-        }
-      std::string msg = std::string("received done ") + std::to_string(bp->current_set->size()) + std::string("/") + std::to_string(bp->nclient);
-      logger::inst().log(&msg);
-      if (bp->current_set->size() == bp->nclient)
-        {
-          bp->level_done = true;
-          if (0 != pthread_cond_broadcast(&bp->monitor_cond))
+          if (0 == memcmp(&bp->my_local_addr.sin_addr, &peer_addr.sin_addr, sizeof(peer_addr.sin_addr)))
             {
-              assert(0);
+              return;
             }
         }
-      pthread_mutex_unlock(&bp->monitor_lock);
     }
 }
 
-void barrier::check()
+int barrier::send_data(struct sockaddr_in& remote, int data)
 {
-  pthread_mutex_lock(&monitor_lock);
-  while (!level_done)
+  int s;
+  if (-1 == (s = socket(AF_INET, SOCK_STREAM, 0)))
     {
-      pthread_cond_wait(&monitor_cond, &monitor_lock);
+      perror("unable to create connect socket");
+      return -1;
     }
-  auto tmp_set = current_set;
-  current_set = next_set;
-  next_set = tmp_set;
-  next_set->clear();
-  level_done = false;
-  pthread_mutex_unlock(&monitor_lock);
+  int reuse = 1;
+  if (-1 == setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)))
+    {
+      close(s);
+      perror("unable to set reuse option for connect");
+      return -1;
+    }
+  while (-1 == connect(s, (struct sockaddr*)&remote, sizeof(struct sockaddr_in)))
+    {
+      if (ECONNREFUSED == errno || EADDRNOTAVAIL == errno)
+        {
+          std::string msg = std::string("retry connect to ") + std::to_string(s);
+          logger::inst().log(&msg);
+          sleep(1);
+        }
+      else
+        {
+          close(s);
+          perror("unable to connect");
+          char buf[INET_ADDRSTRLEN];
+          std::cerr << "errno " << std::to_string(errno) << " peer " << inet_ntop(AF_INET, &remote.sin_addr, buf, INET_ADDRSTRLEN) << ":" << std::to_string(ntohs(remote.sin_port)) << std::endl;
+          return -1;
+        }
+    }
+  int id = htons(data);
+  send(s, &id, sizeof(int), 0);
+  close(s);
+  std::string msg = std::string("connected to ") + std::to_string(s);
+  logger::inst().log(&msg);
+  return 0;
 }
 
-int barrier::notify()
+int barrier::remote_notify(const int barrier_id)
 {
   for (auto& peer : peer_addresses)
     {
-      int s;
-      if (-1 == (s = socket(AF_INET, SOCK_STREAM, 0)))
-	{
-	  perror("unable to create connect socket");
-	  return -1;
-	}
-      int reuse = 1;
-      if (-1 == setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)))
-        {
-          close(s);
-          perror("unable to set reuse option for connect");
-          return -1;
-        }
-      if (-1 == bind(s, (struct sockaddr*)&my_local_addr, sizeof(struct sockaddr_in)))
-        {
-          close(s);
-          perror("unable to bind to connect socket");
-          throw std::exception();
-        }
-      while (-1 == connect(s, (struct sockaddr*)&peer, sizeof(struct sockaddr_in)))
-        {
-          if (ECONNREFUSED == errno || EADDRNOTAVAIL == errno)
-            {
-              std::string msg = std::string("retry connect to ") + std::to_string(s);
-              logger::inst().log(&msg);
-              sleep(1);
-            }
-          else
-            {
-              close(s);
-              perror("unable to connect");
-              char buf[INET_ADDRSTRLEN];
-              std::cerr << "errno " << std::to_string(errno) << " peer " << inet_ntop(AF_INET, &peer.sin_addr, buf, INET_ADDRSTRLEN) << ":" << std::to_string(ntohs(peer.sin_port)) << std::endl;
-              return -1;
-            }
-        }
-      close(s);
-      std::string msg = std::string("connected to ") + std::to_string(s);
-      logger::inst().log(&msg);
+      barrier::send_data(peer, barrier_id);
     }
   return 0;
+}
+
+void barrier::local_notify(int barrier_id)
+{
+  std::unique_lock<std::mutex> lck(monitor_lock);
+  barrier_ids[barrier::id_to_index(barrier_id)]++;
+  monitor_cond.notify_all();
+}
+
+int barrier::notify_and_wait(const int barrier_id, const int reset_barrier_id)
+{
+  if (barrier_id < 1 || barrier_id > barrier_ids.size())
+    {
+      return -1;
+    }
+  remote_notify(barrier_id);
+  std::unique_lock<std::mutex> lck(monitor_lock);
+  while (barrier_ids[barrier::id_to_index(barrier_id)] < nclient)
+    {
+      monitor_cond.wait(lck);
+    }
+  if (reset_barrier_id >= 1 && reset_barrier_id <= barrier_ids.size()
+      && barrier_ids[barrier::id_to_index(reset_barrier_id)] == nclient)
+    {
+      barrier_ids[barrier::id_to_index(reset_barrier_id)] = 0;
+    }
+  return 0;
+}
+
+std::vector<struct sockaddr_in> barrier::get_remote_addresses()
+{
+  return peer_addresses;
+}
+
+void barrier::get_addr(struct addrinfo& hint, const char *addr, const char *port, struct sockaddr_in& sockipaddr)
+{
+  struct addrinfo *info;
+  if (0 != getaddrinfo(addr, port, &hint, &info))
+    {
+      throw std::exception();
+    }
+  assert(sizeof(struct sockaddr_in) == info->ai_addrlen);
+  memcpy(&sockipaddr, info->ai_addr, sizeof(struct sockaddr_in));
+  freeaddrinfo(info);
+}
+
+int barrier::id_to_index(int barrier_id)
+{
+  return barrier_id - 1;
 }

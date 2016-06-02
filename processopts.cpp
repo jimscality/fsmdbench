@@ -7,15 +7,15 @@
 static void
 print_usage()
 {
-  std::cout << "Usage: fsmetadatabn [-h] -t <test directory> [-l <number of levels>] [-d <number of directories per level>] [-f <number of files per level>] [-c <client_index>] [-a <comma separated list of client's addresses>]" << std::endl;
+  std::cout << "Usage: fsmdbench -t <test directory> [-l <number of levels>] [-d <number of directories per level>] [-f <number of files per level>] [-c <threads per server>] [-a <comma separated list of server addresses>] [-o <file name for detailed output>] [-h]" << std::endl;
 }
 
 int
-process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& client_index, std::string& target_dir, int& levels, int& num_dirs, int& num_files, std::string& data_output)
+process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& clients, std::string& target_dir, int& levels, int& num_dirs, int& num_files, std::string& data_output)
 {
   // some default values
   levels = 2;
-  client_index = 0;
+  clients = 1;
   num_dirs = 5;
   num_files = 3;
   int c;
@@ -35,7 +35,7 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& cl
             }
             break;
           case 'c':
-            client_index = std::stoi(std::string(optarg));
+            clients = std::stoi(std::string(optarg));
             break;
           case 't':
             target_dir = optarg;
@@ -75,12 +75,25 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& cl
     {
       addresses.push_back(std::string("127.0.0.1"));
     }
-  if (client_index < 0 || client_index >= addresses.size())
+  if (clients < 1)
     {
       std::cout << "Invalid option for -c" << std::endl;
       print_usage();
       return -1;
     }
   
+  std::cout << "Benchmark setup" << std::endl;
+  std::cout << "  Threads per server: " << clients << std::endl;
+  std::cout << "  Number of server(s): " << addresses.size() << std::endl;
+  std::cout << "  Server(s): ";
+  for (auto& s : addresses)
+    {
+      std::cout << s << " ";
+    }
+  std::cout << std::endl;
+  std::cout << "  Number of directory levels: " << levels << std::endl;
+  std::cout << "  Number of directores per level: " << num_dirs << std::endl;
+  std::cout << "  Number of files per level: " << num_files << std::endl;
+  std::cout << "  Benchmark target directory: " << target_dir << std::endl;
   return 0;
 }

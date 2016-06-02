@@ -7,17 +7,26 @@ void stats::reset()
   sum2 = 0.0;
   counter = 0;
   maxval = 0.0;
+  error_counter = 0;
 }
 
-void stats::process(double data)
+void stats::process(double data, bool error)
 {
-  sum += data;
-  sum2 += data*data;
-  if (data > maxval)
+  std::unique_lock<std::mutex> lck(lock);
+  if (error)
     {
-      maxval = data;
+      error_counter++;
     }
-  counter++;
+  else
+    {
+      sum += data;
+      sum2 += data*data;
+      if (data > maxval)
+        {
+          maxval = data;
+        }
+      counter++;
+    }
 }
 
 double stats::average()
@@ -39,4 +48,9 @@ double stats::variance()
 double stats::ops()
 {
   return sum > 0.0 ? counter*1000000.0/sum : 0.0;
+}
+
+long stats::errors()
+{
+  return error_counter;
 }
