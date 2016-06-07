@@ -15,5 +15,8 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(LFAGS) -o $@ $(OBJS)
 
+test: testcases/*.cpp barrier.cpp barrier.h log.cpp log.h
+	$(CC) $(CFLAGS) $(LFAGS) -o testbarrier testcases/testbarrier.cpp barrier.cpp log.cpp
+
 clean:
 	$(RM) $(TARGET) *.o

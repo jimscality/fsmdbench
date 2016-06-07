@@ -13,7 +13,7 @@
 
 class exec_workload {
   public:
-    exec_workload(std::string top, int nl, std::vector<std::string> *addrs, int dirs, int files, int nclient, std::string out);
+    exec_workload(std::string top, int nl, std::vector<std::string> *addrs, int port, int dirs, int files, int nclient, std::string out);
     virtual ~exec_workload();
 
     void exec_benchmark();

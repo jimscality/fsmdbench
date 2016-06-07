@@ -14,9 +14,10 @@ class barrier
     barrier(const int num_barriers, const int sp, const int thread_clients, const std::vector<std::string> *remote_addresses);
     virtual ~barrier();
 
-    int notify_and_wait(const int barrier_id, const int reset_barrier_id = 0);
+    int notify_and_wait(const int barrier_id);
 
     std::vector<struct sockaddr_in> get_remote_addresses();
+    int get_port();
 
   private:
     static void monitor(barrier * const bp);
@@ -26,7 +27,7 @@ class barrier
     static void get_addr(struct addrinfo& hint, const char *addr, const char *port, struct sockaddr_in& sockipaddr);
     static int id_to_index(int barrier_id);
 
-    int start_port;
+    int port;
     int nclient;
     std::vector<int> barrier_ids;
     std::vector<struct sockaddr_in> peer_addresses;

@@ -82,4 +82,4 @@ Usage examples
 mkdir -p /tmp/bench
 fsmdbench -t /tmp/bench
 
-fsmdbench -t /tmp/bench -c 3 -a 192.168.1.10,192.168.1.11 -l 10 -d 5 -f 10
+fsmdbench -t /tmp/bench -c 3 -p 12420 -a 192.168.1.10,192.168.1.11:12420 -l 10 -d 5 -f 10

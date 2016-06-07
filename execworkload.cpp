@@ -14,8 +14,8 @@
 #include "processopts.h"
 #include "execworkload.h"
 
-exec_workload::exec_workload(std::string top, int nl, std::vector<std::string> *addrs, int dirs, int files, int nclient, std::string out)
-  : target_dir(top), nlevel(nl), addresses(addrs), dirs_per_client(dirs), files_per_client(files), num_client_threads(nclient), output_path(out), door(2, 12420, nclient, addrs)
+exec_workload::exec_workload(std::string top, int nl, std::vector<std::string> *addrs, int port, int dirs, int files, int nclient, std::string out)
+  : target_dir(top), nlevel(nl), addresses(addrs), dirs_per_client(dirs), files_per_client(files), num_client_threads(nclient), output_path(out), door(2, port, nclient, addrs)
 {
 }
 
@@ -68,10 +68,10 @@ void exec_workload::measure_op_oneclient(int op, int initial_level, int incr, st
     }
   for (int l = initial_level; l >= 0 && l < nlevel; l += incr)
     {
-      door.notify_and_wait(1, 2);
+      door.notify_and_wait(1);
       handle_one_dir(op, (*nameset)[l].get_dir_names());
       handle_one_file(op, (*nameset)[l].get_file_names());
-      door.notify_and_wait(2, 1);
+      door.notify_and_wait(2);
     }
   if (0 == client_thread_index)
     {
@@ -127,6 +127,7 @@ void exec_workload::exec_benchmark()
 int exec_workload::get_client_index(const int client_thread_index)
 {
   std::vector<struct sockaddr_in> remote_addresses = door.get_remote_addresses();
+  int network_port = htons(door.get_port());
 
   struct ifaddrs *ifaddr, *ifa;
   int family, s;
@@ -152,7 +153,8 @@ int exec_workload::get_client_index(const int client_thread_index)
       for (int i = 0; i < remote_addresses.size(); i++)
         {
           struct sockaddr_in& addr = remote_addresses.at(i);
-          if (0 == memcmp(&((struct sockaddr_in*)ifa->ifa_addr)->sin_addr, &addr.sin_addr, sizeof(struct in_addr)))
+          if (0 == memcmp(&((struct sockaddr_in*)ifa->ifa_addr)->sin_addr, &addr.sin_addr, sizeof(struct in_addr))
+              && network_port == addr.sin_port)
             {
               freeifaddrs(ifaddr);
               return client_thread_index + i * num_client_threads;

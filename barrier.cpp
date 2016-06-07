@@ -10,7 +10,7 @@
 #include "barrier.h"
 #include "log.h"
 
-barrier::barrier(const int num_barriers, const int sp, const int thread_clients, const std::vector<std::string> *remote_addresses) : start_port(sp)
+barrier::barrier(const int num_barriers, const int sp, const int thread_clients, const std::vector<std::string> *remote_addresses) : port(sp)
 {
   nclient = thread_clients * remote_addresses->size();
   for (int i = 0; i < num_barriers; i++)
@@ -23,12 +23,35 @@ barrier::barrier(const int num_barriers, const int sp, const int thread_clients,
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
 
-  barrier::get_addr(hints, "127.0.0.1", std::to_string(start_port).c_str(), my_local_addr);
+  barrier::get_addr(hints, "127.0.0.1", std::to_string(port).c_str(), my_local_addr);
 
   for (int i = 0; i < remote_addresses->size(); i++)
     {
       struct sockaddr_in peeraddr;
-      barrier::get_addr(hints, remote_addresses->at(i).c_str(), std::to_string(start_port).c_str(), peeraddr);
+      std::string remoteone = remote_addresses->at(i);
+      std::string ip_addr;
+      std::string remote_port = std::to_string(port);
+
+      std::size_t start = 0, end = 0;
+      while ((end = remoteone.find(':', start)) != std::string::npos)
+        {
+          if (start == 0)
+            {
+              ip_addr = remoteone.substr(start, end - start);
+              remote_port = remoteone.substr(end + 1);
+            }
+          else
+            {
+              throw std::exception();
+            }
+          start = end + 1;
+        }
+      if (start == 0)
+        {
+          throw std::exception();
+        }
+
+      barrier::get_addr(hints, ip_addr.c_str(), remote_port.c_str(), peeraddr);
       peer_addresses.push_back(peeraddr);
     }
 
@@ -49,7 +72,7 @@ barrier::barrier(const int num_barriers, const int sp, const int thread_clients,
   struct addrinfo *bindaddrinfo;
   struct sockaddr_in bindaddr;
 
-  barrier::get_addr(hints, NULL, std::to_string(start_port).c_str(), bindaddr);
+  barrier::get_addr(hints, NULL, std::to_string(port).c_str(), bindaddr);
 
   if (-1 == bind(monitor_socket, (struct sockaddr*)&bindaddr, sizeof(struct sockaddr_in)))
     {
@@ -156,27 +179,32 @@ int barrier::remote_notify(const int barrier_id)
 
 void barrier::local_notify(int barrier_id)
 {
+  int index = barrier::id_to_index(barrier_id);
   std::unique_lock<std::mutex> lck(monitor_lock);
-  barrier_ids[barrier::id_to_index(barrier_id)]++;
+  if (barrier_ids[index] == nclient)
+    {
+      barrier_ids[index] = 0;
+    }
+  barrier_ids[index]++;
   monitor_cond.notify_all();
 }
 
-int barrier::notify_and_wait(const int barrier_id, const int reset_barrier_id)
+int barrier::notify_and_wait(const int barrier_id)
 {
   if (barrier_id < 1 || barrier_id > barrier_ids.size())
     {
       return -1;
     }
-  remote_notify(barrier_id);
   std::unique_lock<std::mutex> lck(monitor_lock);
-  while (barrier_ids[barrier::id_to_index(barrier_id)] < nclient)
+  int index = barrier::id_to_index(barrier_id);
+  if (barrier_ids[index] == nclient)
+    {
+      barrier_ids[index] = 0;
+    }
+  remote_notify(barrier_id);
+  while (barrier_ids[index] < nclient)
     {
       monitor_cond.wait(lck);
-    }
-  if (reset_barrier_id >= 1 && reset_barrier_id <= barrier_ids.size()
-      && barrier_ids[barrier::id_to_index(reset_barrier_id)] == nclient)
-    {
-      barrier_ids[barrier::id_to_index(reset_barrier_id)] = 0;
     }
   return 0;
 }
@@ -201,4 +229,9 @@ void barrier::get_addr(struct addrinfo& hint, const char *addr, const char *port
 int barrier::id_to_index(int barrier_id)
 {
   return barrier_id - 1;
+}
+
+int barrier::get_port()
+{
+  return port;
 }
