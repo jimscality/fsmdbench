@@ -14,13 +14,18 @@
 #include "processopts.h"
 #include "execworkload.h"
 
-exec_workload::exec_workload(std::string top, int nl, std::vector<std::string> *addrs, int port, int dirs, int files, int nclient, std::string out)
-  : target_dir(top), nlevel(nl), addresses(addrs), dirs_per_client(dirs), files_per_client(files), num_client_threads(nclient), output_path(out), door(2, port, nclient, addrs)
+exec_workload::exec_workload(std::string top, int nl, std::vector<std::string> *addrs, int local_idx, int dirs, int files, int nclient, std::string out)
+  : target_dir(top), nlevel(nl), addresses(addrs), local_index(local_idx), dirs_per_client(dirs), files_per_client(files), num_client_threads(nclient), output_path(out)
 {
+  comm_channel = new conn_channel();
+  comm_channel->init(local_idx, addrs);
+  door = new barrier(2, num_client_threads*addresses->size(), comm_channel);
 }
 
 exec_workload::~exec_workload()
 {
+  delete door;
+  delete comm_channel;
 }
 
 void exec_workload::handle_one_dir(int op, std::vector<std::string>& names)
@@ -68,10 +73,10 @@ void exec_workload::measure_op_oneclient(int op, int initial_level, int incr, st
     }
   for (int l = initial_level; l >= 0 && l < nlevel; l += incr)
     {
-      door.notify_and_wait(1);
+      door->notify_and_wait(1);
       handle_one_dir(op, (*nameset)[l].get_dir_names());
       handle_one_file(op, (*nameset)[l].get_file_names());
-      door.notify_and_wait(2);
+      door->notify_and_wait(2);
     }
   if (0 == client_thread_index)
     {
@@ -126,42 +131,5 @@ void exec_workload::exec_benchmark()
 
 int exec_workload::get_client_index(const int client_thread_index)
 {
-  std::vector<struct sockaddr_in> remote_addresses = door.get_remote_addresses();
-  int network_port = htons(door.get_port());
-
-  struct ifaddrs *ifaddr, *ifa;
-  int family, s;
-  char host[NI_MAXHOST];
-
-  if (getifaddrs(&ifaddr) == -1)
-    {
-      perror("getifaddrs");
-    }
-
-  for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
-    {
-      if (ifa->ifa_addr == NULL)
-        {
-          continue;
-        }
-      family = ifa->ifa_addr->sa_family;
-      if (family != AF_INET)
-        {
-          continue;
-        }
-
-      for (int i = 0; i < remote_addresses.size(); i++)
-        {
-          struct sockaddr_in& addr = remote_addresses.at(i);
-          if (0 == memcmp(&((struct sockaddr_in*)ifa->ifa_addr)->sin_addr, &addr.sin_addr, sizeof(struct in_addr))
-              && network_port == addr.sin_port)
-            {
-              freeifaddrs(ifaddr);
-              return client_thread_index + i * num_client_threads;
-            }
-        }
-    }
-
-  freeifaddrs(ifaddr);
-  return -1;
+  return client_thread_index + local_index*num_client_threads;
 }

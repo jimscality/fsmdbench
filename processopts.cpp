@@ -4,10 +4,12 @@
 #include <unistd.h>
 #include "processopts.h"
 
+#define DEFAULT_PORT 12420
+
 static void
 print_usage()
 {
-  std::cout << "Usage: fsmdbench -t <test directory> [-l <number of levels>] [-d <number of directories per level>] [-f <number of files per level>] [-c <threads per server>] [-p port] [-a <comma separated list of server addresses and ports>] [-o <file name for detailed output>] [-h]" << std::endl;
+  std::cout << "Usage: fsmdbench -t <test directory> [-l <number of levels>] [-d <number of directories per level>] [-f <number of files per level>] [-c <threads per server>] [-p local_index] [-a <comma separated list of server addresses and ports>] [-o <file name for detailed output>] [-h]" << std::endl;
 }
 
 std::string get_remote_address(const std::string& str)
@@ -21,7 +23,7 @@ std::string get_remote_address(const std::string& str)
     }
   if (count == 0)
     {
-      return str + ":" + std::to_string(12420);
+      return str + ":" + std::to_string(DEFAULT_PORT);
     }
   else if (count == 1)
     {
@@ -31,14 +33,14 @@ std::string get_remote_address(const std::string& str)
 }
 
 int
-process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& port, int& clients, std::string& target_dir, int& levels, int& num_dirs, int& num_files, std::string& data_output)
+process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& local_index, int& clients, std::string& target_dir, int& levels, int& num_dirs, int& num_files, std::string& data_output)
 {
   // some default values
   levels = 2;
   clients = 1;
   num_dirs = 5;
   num_files = 3;
-  port = 12420;
+  local_index = -1;
   int c;
   while (-1 != (c = getopt(argc, argv, "a:p:c:t:l:d:f:o:h")))
     {
@@ -66,7 +68,7 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& po
             }
             break;
           case 'p':
-            port = std::stoi(std::string(optarg));
+            local_index = std::stoi(std::string(optarg));
             break;
           case 'c':
             clients = std::stoi(std::string(optarg));
@@ -107,8 +109,26 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& po
     }
   if (0 == addresses.size())
     {
-      addresses.push_back(std::string("127.0.0.1"));
+      addresses.push_back(std::string("127.0.0.1:") + std::to_string(DEFAULT_PORT));
     }
+  if (addresses.size() > 1 && local_index < 0)
+    {
+      std::cout << "Local index must be specified to identify one of addresses for local server" << std::endl;
+      print_usage();
+      return -1;
+    }
+  if (addresses.size() < 2 && local_index < 0)
+    {
+      local_index = 0;
+    }
+
+  if (local_index >= addresses.size())
+    {
+      std::cout << "Local index must identify one of addresses" << std::endl;
+      print_usage();
+      return -1;
+    }
+
   if (clients < 1)
     {
       std::cout << "Invalid option for -c" << std::endl;
@@ -125,7 +145,6 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& po
       std::cout << s << " ";
     }
   std::cout << std::endl;
-  std::cout << "  bind to local port: " << std::to_string(port) << std::endl;
   std::cout << "  Number of directory levels: " << levels << std::endl;
   std::cout << "  Number of directores per level: " << num_dirs << std::endl;
   std::cout << "  Number of files per level: " << num_files << std::endl;

@@ -28,13 +28,15 @@ class exec_workload {
     int get_client_index(const int client_thread_index);
 
     std::string target_dir;
+    int local_index;
     int nlevel;
     std::vector<std::string> *addresses;
     int dirs_per_client;
     int files_per_client;
     int num_client_threads;
     std::string output_path;
-    barrier door;
+    channel * comm_channel;
+    barrier * door;
 
     dir_op dop;
     file_op fop;
