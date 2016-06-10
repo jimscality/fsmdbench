@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS = -std=c++11 -pthread -g -O0
+CFLAGS = -std=c++11 -pthread -g -O3
 LFLAGS = -lm
 
 DEPS=barrier.h dirops.h fileops.h namegen.h nameset.h ops.h processopts.h taskresult.h log.h stats.h execworkload.h communication.h
@@ -16,7 +16,7 @@ $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(LFAGS) -o $@ $(OBJS)
 
 test: testcases/*.cpp communication.cpp communication.h barrier.cpp barrier.h log.cpp log.h
-	$(CC) $(CFLAGS) $(LFAGS) -o testbarrier testcases/testbarrier.cpp communication.cpp barrier.cpp log.cpp
+	$(CC) $(CFLAGS) $(LFAGS) -o testbarrier testcases/testbarrier.cpp communication.cpp barrier.cpp
 
 clean:
 	$(RM) $(TARGET) *.o

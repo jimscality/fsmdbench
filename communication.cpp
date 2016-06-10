@@ -154,11 +154,7 @@ int sock_channel::stop()
   monitor_thread.join();
 }
 
-conn_channel::conn_channel()
-{
-}
-
-conn_channel::~conn_channel()
+int conn_channel::stop()
 {
   send_data(local_index, -1);
   sock_channel::stop();

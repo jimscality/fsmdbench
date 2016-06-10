@@ -18,6 +18,7 @@ barrier::barrier(const int num_barriers, const int num_participants, channel *cc
 
 barrier::~barrier()
 {
+  comm_channel->stop();
 }
 
 void barrier::handle_recv(int data, void *param)
@@ -41,6 +42,7 @@ void barrier::local_notify(int barrier_id)
       barrier_ids[index] = 0;
     }
   barrier_ids[index]++;
+  lck.unlock();
   barrier_cond.notify_all();
 }
 
@@ -50,13 +52,17 @@ int barrier::notify_and_wait(const int barrier_id)
     {
       return -1;
     }
-  std::unique_lock<std::mutex> lck(barrier_lock);
   int index = barrier::id_to_index(barrier_id);
+  std::unique_lock<std::mutex> lck(barrier_lock);
   if (barrier_ids[index] == nclient)
     {
       barrier_ids[index] = 0;
     }
+  lck.unlock();
+  // remote_notify needs to be after the above boundary check.
+  // otherwise the check may include the effect of this notify.
   remote_notify(barrier_id);
+  lck.lock();
   while (barrier_ids[index] < nclient)
     {
       barrier_cond.wait(lck);

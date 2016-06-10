@@ -58,8 +58,7 @@ class sock_channel : public channel
 class conn_channel : public sock_channel
 {
   public:
-    conn_channel();
-    virtual ~conn_channel();
+    int stop();
     int send_data(int peer_index, int data);
     int broadcast_data(int data);
 

@@ -53,8 +53,12 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& lo
               while ((end = text.find(',', start)) != std::string::npos) {
                 try
                   {
-                    std::string addr = get_remote_address(text.substr(start, end - start));
-                    addresses.push_back(addr);
+                    std::string s = text.substr(start, end - start);
+                    if (s.length() > 0)
+                      {
+                        std::string addr = get_remote_address(s);
+                        addresses.push_back(addr);
+                      }
                   }
                 catch (std::exception e)
                   {
@@ -64,7 +68,12 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& lo
                   }
                 start = end + 1;
               }
-              addresses.push_back(text.substr(start));
+              std::string s = text.substr(start);
+              if (s.length() > 0)
+                {
+                  std::string addr = get_remote_address(s);
+                  addresses.push_back(addr);
+                }
             }
             break;
           case 'p':
