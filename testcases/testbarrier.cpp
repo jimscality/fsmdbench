@@ -10,15 +10,15 @@ void test(void *param)
   for (int i = 0; i < 100000; i++)
     {
       b->notify_and_wait(1);
-//      if (i % 10000 == 0)
-//        {
+      if (i % 10000 == 0)
+        {
           std::cout << "gate 1 iter " << std::to_string(i) << ": " << std::this_thread::get_id() << std::endl;
-//        }
+        }
       b->notify_and_wait(2);
-//      if (i % 10000 == 0)
-//        {
+      if (i % 10000 == 0)
+        {
           std::cout << "gate 2 iter " << std::to_string(i) << ": " << std::this_thread::get_id() << std::endl;
-//        }
+        }
     }
 }
 
@@ -35,7 +35,8 @@ int main(int argc, char ** argv)
     {
       addresses.push_back(std::string("127.0.0.1:") + std::to_string(12420+i));
     }
-  std::vector<conn_channel> c_list(n);
+//  std::vector<conn_channel> c_list(n);
+  std::vector<persistence_channel> c_list(n);
   for (int i = 0; i < n; i++)
     {
       c_list[i].init(i, &addresses);
@@ -60,5 +61,6 @@ int main(int argc, char ** argv)
     {
       delete t_list[i];
       delete b_list[i];
+      c_list[i].destroy();
     }
 }

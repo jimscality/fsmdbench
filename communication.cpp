@@ -4,6 +4,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <iostream>
+#include <signal.h>
+#include <fcntl.h>
 #include "communication.h"
 
 channel::channel()
@@ -21,6 +23,19 @@ void channel::init(int local_idx, const std::vector<std::string> *remote_list)
   state = CHANNEL_INIT;
   this->local_index = local_idx;
   this->remote_addresses = *remote_list;
+}
+
+void channel::destroy()
+{
+  std::unique_lock<std::mutex> lock(state_lock);
+  if (state == CHANNEL_INIT || state == CHANNEL_STOP)
+    {
+      state = CHANNEL_CREATE;
+    }
+  else
+    {
+      throw std::exception();
+    }
 }
 
 int channel::start(RECV_CB cb, void* cb_param)
@@ -129,7 +144,14 @@ void sock_channel::init(int local_idx, const std::vector<std::string> *remote_li
       perror("unable to bind to monitor socket");
       throw std::exception();
     }
-  
+  monitor_thread = std::thread(sock_channel::monitor_static, this);
+}
+
+void sock_channel::destroy()
+{
+  channel::destroy();
+  close(monitor_socket);
+  monitor_thread.join();
 }
 
 int sock_channel::get_monitor_socket()
@@ -137,10 +159,27 @@ int sock_channel::get_monitor_socket()
   return monitor_socket;
 }
 
+void sock_channel::setnonblocking(int sock)
+{
+	int opts;
+
+	opts = fcntl(sock,F_GETFL);
+	if (opts < 0) {
+		perror("fcntl(F_GETFL)");
+		exit(EXIT_FAILURE);
+	}
+	opts = (opts | O_NONBLOCK);
+	if (fcntl(sock,F_SETFL,opts) < 0) {
+		perror("fcntl(F_SETFL)");
+		exit(EXIT_FAILURE);
+	}
+	return;
+}
+
+
 int sock_channel::start(RECV_CB cb, void* cb_param)
 {
   channel::start(cb, cb_param);
-  monitor_thread = std::thread(sock_channel::monitor_static, this);
 }
 
 void sock_channel::monitor_static(sock_channel* const cp)
@@ -150,8 +189,7 @@ void sock_channel::monitor_static(sock_channel* const cp)
 
 int sock_channel::stop()
 {
-  close(monitor_socket);
-  monitor_thread.join();
+  channel::stop();
 }
 
 int conn_channel::stop()
@@ -227,6 +265,10 @@ void conn_channel::monitor(sock_channel* const scp)
         }
       int data;
       int n = recv(s, &data, sizeof(int), 0);
+      if (n == 0)
+        {
+          return;
+        }
       data = ntohl(data);
       close(s);
 
@@ -236,5 +278,130 @@ void conn_channel::monitor(sock_channel* const scp)
         }
 
       cp->recv_callback(data, cp->recv_param);
+    }
+}
+
+int persistence_channel::start(RECV_CB cb, void* cb_param)
+{
+  sock_channel::start(cb, cb_param);
+  for (int i = 0; i < peer_addresses.size(); i++)
+    {
+      struct sockaddr_in *remote = &peer_addresses[i];
+      int s;
+      if (-1 == (s = socket(AF_INET, SOCK_STREAM, 0)))
+        {
+          perror("unable to create connect socket");
+          return -1;
+        }
+      int reuse = 1;
+      if (-1 == setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int)))
+        {
+          close(s);
+          perror("unable to set reuse option for connect");
+          return -1;
+        }
+      while (-1 == connect(s, (struct sockaddr*)remote, sizeof(struct sockaddr_in)))
+        {
+          if (ECONNREFUSED == errno || EADDRNOTAVAIL == errno)
+            {
+              std::string msg = std::string("retry connect to ") + std::to_string(s);
+              sleep(1);
+            }
+          else
+            {
+              close(s);
+              perror("unable to connect");
+              char buf[INET_ADDRSTRLEN];
+              std::cerr << "errno " << std::to_string(errno) << " peer " << inet_ntop(AF_INET, &remote->sin_addr, buf, INET_ADDRSTRLEN) << ":" << std::to_string(ntohs(remote->sin_port)) << std::endl;
+              return -1;
+            }
+        }
+      send_sockets.push_back(s);
+    }
+  return 0;
+}
+
+int persistence_channel::stop()
+{
+  sock_channel::stop();
+  for (auto s : send_sockets)
+    {
+      close(s);
+    }
+}
+
+int persistence_channel::send_data(int peer_index, int data)
+{
+  int s = send_sockets[peer_index];
+  int id = htonl(data);
+  return send(s, &id, sizeof(int), 0);
+}
+
+int persistence_channel::broadcast_data(int data)
+{
+  for (int i = 0; i < peer_addresses.size(); i++)
+    {
+      send_data(i, data);
+    }
+}
+
+void persistence_channel::monitor(sock_channel* const scp)
+{
+  persistence_channel * const cp = dynamic_cast<persistence_channel*>(scp);
+  if (-1 == listen(cp->get_monitor_socket(), cp->remote_addresses.size()))
+    {
+      perror("unable to listen on monitor socket");
+      return;
+    }
+
+  fd_set fds;
+
+  while (1)
+    {
+      FD_ZERO(&fds);
+      FD_SET(cp->get_monitor_socket(), &fds);
+
+      int max_sock = cp->get_monitor_socket();
+      for (int s : cp->recv_sockets)
+         {
+           if (s > max_sock)
+             {
+               max_sock = s;
+             }
+           FD_SET(s, &fds);
+         }
+
+      if (-1 == select(max_sock + 1, &fds, NULL, NULL, NULL))
+        {
+          return;
+        }
+      if (FD_ISSET(cp->get_monitor_socket(), &fds))
+        {
+          int s;
+          struct sockaddr_in peer_addr;
+          socklen_t addr_len = sizeof(struct sockaddr_in);
+          if (-1 == (s = accept(cp->get_monitor_socket(), (struct sockaddr*)&peer_addr, &addr_len)))
+            {
+              std::cout << "accept error" << std::endl;
+              return;
+            }
+          setnonblocking(s);
+          cp->recv_sockets.push_back(s);
+        }
+      for (int s : cp->recv_sockets)
+        {
+          if (FD_ISSET(s, &fds))
+            {
+              int data;
+              int n = recv(s, &data, sizeof(int), 0);
+              if (n == -1 || n == 0)
+                {
+                  continue;
+                }
+
+              data = ntohl(data);
+              cp->recv_callback(data, cp->recv_param);
+            }
+        }
     }
 }
