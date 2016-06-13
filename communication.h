@@ -1,8 +1,9 @@
 #include <vector>
 #include <string>
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 #include <thread>
 #include <mutex>
-#include <condition_variable>
+#endif
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -18,6 +19,7 @@ class channel
 {
   public:
     channel();
+    virtual ~channel();
 
     virtual void init(int local_idx, const std::vector<std::string> *remote_list);
     virtual void destroy();
@@ -34,13 +36,19 @@ class channel
 
   private:
     int state;
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
     std::mutex state_lock;
+#else
+    pthread_mutex_t state_lock;
+#endif
 };
 
 class sock_channel : public channel
 {
   public:
     sock_channel();
+    virtual ~sock_channel();
+
     virtual void init(int local_index, const std::vector<std::string> *remote_list);
     virtual void destroy();
     virtual int start(RECV_CB cb, void* cb_param);
@@ -53,10 +61,18 @@ class sock_channel : public channel
 
     std::vector<struct sockaddr_in> peer_addresses;
   private:
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
     static void monitor_static(sock_channel* const cp);
+#else
+    static void * monitor_static(void * cp);
+#endif
 
     int monitor_socket;
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
     std::thread monitor_thread;
+#else
+    pthread_t monitor_thread;
+#endif
 };
 
 class conn_channel : public sock_channel

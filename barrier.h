@@ -1,6 +1,8 @@
 #include <vector>
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 #include <mutex>
 #include <condition_variable>
+#endif
 #include "communication.h"
 
 #ifndef __BARRIER_H
@@ -23,8 +25,13 @@ class barrier
     channel *comm_channel;
     int nclient;
     std::vector<int> barrier_ids;
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
     std::mutex barrier_lock;
     std::condition_variable barrier_cond;
+#else
+    pthread_mutex_t barrier_lock;
+    pthread_cond_t barrier_cond;
+#endif
 };
 
 #endif

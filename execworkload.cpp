@@ -8,6 +8,9 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <ifaddrs.h>
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+#include "util.h"
+#endif
 #include "barrier.h"
 #include "nameset.h"
 #include "namegen.h"
@@ -43,8 +46,14 @@ void exec_workload::handle_one_file(int op, std::vector<std::string>& names)
 void exec_workload::handle_one(int op, timed_task *task, std::vector<std::string>& names, stats *data_handler)
 {
   task_result result;
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   for (auto& dn : names)
     {
+#else
+  for (int i = 0; i < names.size(); i++)
+    {
+      std::string& dn = names[i];
+#endif
       task->exec(op, &dn, result);
       data_handler->process((double)result.duration, result.status_code != 0);
       if (data_file.is_open())
@@ -56,6 +65,7 @@ void exec_workload::handle_one(int op, timed_task *task, std::vector<std::string
 
 void exec_workload::print_summary(int op, std::string object_type, stats& data)
 {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   std::cout << get_op_name(op) << " " << object_type << " result:" << std::endl
             << "   throughput(ops/s):  " << std::to_string(data.ops()) << std::endl
             << "   latency (micro sec) " << std::endl
@@ -64,6 +74,16 @@ void exec_workload::print_summary(int op, std::string object_type, stats& data)
             << "              maximum: " << std::to_string(data.maxvalue()) << std::endl
             << "   errors: " << std::to_string(data.errors()) << std::endl
             << std::endl;
+#else
+  std::cout << get_op_name(op) << " " << object_type << " result:" << std::endl
+            << "   throughput(ops/s):  " << to_string(data.ops()) << std::endl
+            << "   latency (micro sec) " << std::endl
+            << "              average: " << to_string(data.average()) << std::endl
+            << "             variance: " << to_string(data.variance()) << std::endl
+            << "              maximum: " << to_string(data.maxvalue()) << std::endl
+            << "   errors: " << to_string(data.errors()) << std::endl
+            << std::endl;
+#endif
 }
 
 void exec_workload::measure_op_oneclient(int op, int initial_level, int incr, std::vector<name_set> *nameset, int client_thread_index)
@@ -87,8 +107,17 @@ void exec_workload::measure_op_oneclient(int op, int initial_level, int incr, st
     }
 }
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 void exec_workload::bench_oneclient(exec_workload *ew, const int client_thread_index)
 {
+#else
+void *exec_workload::bench_oneclient(void *td)
+{
+  struct ew_tdata *etd = (struct ew_tdata *) td;
+  exec_workload *ew = etd->ewp;
+  const int client_thread_index = etd->client_idx;
+  delete etd;
+#endif
   int client_index = ew->get_client_index(client_thread_index);
   int total_clients = ew->num_client_threads * ew->addresses->size();
 
@@ -98,7 +127,11 @@ void exec_workload::bench_oneclient(exec_workload *ew, const int client_thread_i
     {
       if (0 != namegen.next_level(nameset[l]))
         {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
           return;
+#else
+          return 0;
+#endif
         }
     }
 
@@ -106,23 +139,44 @@ void exec_workload::bench_oneclient(exec_workload *ew, const int client_thread_i
   ew->measure_op_oneclient(UPDATE, 0, 1, &nameset, client_thread_index);
   ew->measure_op_oneclient(DELETE, ew->nlevel-1, -1, &nameset, client_thread_index);
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   return;
+#else
+  return 0;
+#endif
 }
 
 void exec_workload::exec_benchmark()
 {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   data_file.open(output_path);
+#else
+  data_file.open(output_path.c_str());
+#endif
 
   std::cout << std::endl;
   
   for (int i = 0; i < num_client_threads; i++)
     {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       client_threads.push_back(std::thread(bench_oneclient, this, i));
+#else
+      pthread_t tid;
+      struct ew_tdata *td = new ew_tdata();
+      td->ewp = this;
+      td->client_idx = i;
+      pthread_create(&tid, NULL, bench_oneclient, td);
+      client_threads.push_back(tid);
+#endif
     }
 
   for (int i = 0; i < num_client_threads; i++)
     {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       client_threads[i].join();
+#else
+      pthread_join(client_threads[i], NULL);
+#endif
     }
 
   if (data_file.is_open())

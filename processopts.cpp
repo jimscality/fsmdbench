@@ -2,6 +2,9 @@
 #include <vector>
 #include <iostream>
 #include <unistd.h>
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+#include "util.h"
+#endif
 #include "processopts.h"
 
 #define DEFAULT_PORT 12420
@@ -23,7 +26,11 @@ std::string get_remote_address(const std::string& str)
     }
   if (count == 0)
     {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       return str + ":" + std::to_string(DEFAULT_PORT);
+#else
+      return str + ":" + to_string(DEFAULT_PORT);
+#endif
     }
   else if (count == 1)
     {
@@ -77,22 +84,42 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& lo
             }
             break;
           case 'p':
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
             local_index = std::stoi(std::string(optarg));
+#else
+            local_index = stoi(std::string(optarg));
+#endif
             break;
           case 'c':
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
             clients = std::stoi(std::string(optarg));
+#else
+            clients = stoi(std::string(optarg));
+#endif
             break;
           case 't':
             target_dir = optarg;
             break;
           case 'l':
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
             levels = std::stoi(std::string(optarg));
+#else
+            levels = stoi(std::string(optarg));
+#endif
             break;
           case 'd':
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
             num_dirs = std::stoi(std::string(optarg));
+#else
+            num_dirs = stoi(std::string(optarg));
+#endif
             break;
           case 'f':
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
             num_dirs = std::stoi(std::string(optarg));
+#else
+            num_dirs = stoi(std::string(optarg));
+#endif
             break;
           case 'o':
             data_output = optarg;
@@ -118,7 +145,11 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& lo
     }
   if (0 == addresses.size())
     {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       addresses.push_back(std::string("127.0.0.1:") + std::to_string(DEFAULT_PORT));
+#else
+      addresses.push_back(std::string("127.0.0.1:") + to_string(DEFAULT_PORT));
+#endif
     }
   if (addresses.size() > 1 && local_index < 0)
     {
@@ -149,8 +180,14 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& lo
   std::cout << "  Threads per server: " << clients << std::endl;
   std::cout << "  Number of server(s): " << addresses.size() << std::endl;
   std::cout << "  Server(s): ";
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   for (auto& s : addresses)
     {
+#else
+  for (int i = 0; i < addresses.size(); i++)
+    {
+      std::string& s = addresses[i];
+#endif
       std::cout << s << " ";
     }
   std::cout << std::endl;

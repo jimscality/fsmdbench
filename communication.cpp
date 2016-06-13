@@ -6,16 +6,36 @@
 #include <iostream>
 #include <signal.h>
 #include <fcntl.h>
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include "util.h"
+#endif
 #include "communication.h"
 
 channel::channel()
 {
   state = CHANNEL_CREATE;
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+  pthread_mutex_init(&state_lock, NULL);
+#endif
+}
+
+channel::~channel()
+{
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+  pthread_mutex_destroy(&state_lock);
+#endif
 }
 
 void channel::init(int local_idx, const std::vector<std::string> *remote_list)
 {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   std::unique_lock<std::mutex> lock(state_lock);
+#else
+  pthread_mutex_lock(&state_lock);
+#endif
   if (state != CHANNEL_CREATE)
     {
       throw std::exception();
@@ -23,11 +43,18 @@ void channel::init(int local_idx, const std::vector<std::string> *remote_list)
   state = CHANNEL_INIT;
   this->local_index = local_idx;
   this->remote_addresses = *remote_list;
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+  pthread_mutex_unlock(&state_lock);
+#endif
 }
 
 void channel::destroy()
 {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   std::unique_lock<std::mutex> lock(state_lock);
+#else
+  pthread_mutex_lock(&state_lock);
+#endif
   if (state == CHANNEL_INIT || state == CHANNEL_STOP)
     {
       state = CHANNEL_CREATE;
@@ -36,11 +63,18 @@ void channel::destroy()
     {
       throw std::exception();
     }
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+  pthread_mutex_unlock(&state_lock);
+#endif
 }
 
 int channel::start(RECV_CB cb, void* cb_param)
 {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   std::unique_lock<std::mutex> lock(state_lock);
+#else
+  pthread_mutex_lock(&state_lock);
+#endif
   if (state != CHANNEL_INIT && state != CHANNEL_STOP)
     {
       throw std::exception();
@@ -48,19 +82,33 @@ int channel::start(RECV_CB cb, void* cb_param)
   state = CHANNEL_START;
   this->recv_callback = cb;
   this->recv_param = cb_param;
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+  pthread_mutex_unlock(&state_lock);
+#endif
 }
 
 int channel::stop()
 {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   std::unique_lock<std::mutex> lock(state_lock);
+#else
+  pthread_mutex_lock(&state_lock);
+#endif
   if (state != CHANNEL_START)
     {
       throw std::exception();
     }
   state = CHANNEL_STOP;
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+  pthread_mutex_unlock(&state_lock);
+#endif
 }
 
 sock_channel::sock_channel()
+{
+}
+
+sock_channel::~sock_channel()
 {
 }
 
@@ -144,14 +192,22 @@ void sock_channel::init(int local_idx, const std::vector<std::string> *remote_li
       perror("unable to bind to monitor socket");
       throw std::exception();
     }
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   monitor_thread = std::thread(sock_channel::monitor_static, this);
+#else
+  pthread_create(&monitor_thread, NULL, sock_channel::monitor_static, this);
+#endif
 }
 
 void sock_channel::destroy()
 {
   channel::destroy();
   close(monitor_socket);
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   monitor_thread.join();
+#else
+  pthread_join(monitor_thread, NULL);
+#endif
 }
 
 int sock_channel::get_monitor_socket()
@@ -182,10 +238,19 @@ int sock_channel::start(RECV_CB cb, void* cb_param)
   channel::start(cb, cb_param);
 }
 
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 void sock_channel::monitor_static(sock_channel* const cp)
 {
   cp->monitor(cp);
 }
+#else
+void * sock_channel::monitor_static(void *cp)
+{
+  sock_channel* scp = (sock_channel*)cp;
+  scp->monitor(scp);
+  return 0;
+}
+#endif
 
 int sock_channel::stop()
 {
@@ -218,7 +283,11 @@ int conn_channel::send_data(int peer_index, int data)
     {
       if (ECONNREFUSED == errno || EADDRNOTAVAIL == errno)
         {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
           std::string msg = std::string("retry connect to ") + std::to_string(s);
+#else
+          std::string msg = std::string("retry connect to ") + to_string(s);
+#endif
           sleep(1);
         }
       else
@@ -226,7 +295,11 @@ int conn_channel::send_data(int peer_index, int data)
           close(s);
           perror("unable to connect");
           char buf[INET_ADDRSTRLEN];
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
           std::cerr << "errno " << std::to_string(errno) << " peer " << inet_ntop(AF_INET, &remote->sin_addr, buf, INET_ADDRSTRLEN) << ":" << std::to_string(ntohs(remote->sin_port)) << std::endl;
+#else
+          std::cerr << "errno " << to_string(errno) << " peer " << inet_ntop(AF_INET, &remote->sin_addr, buf, INET_ADDRSTRLEN) << ":" << to_string(ntohs(remote->sin_port)) << std::endl;
+#endif
           return -1;
         }
     }
@@ -304,7 +377,11 @@ int persistence_channel::start(RECV_CB cb, void* cb_param)
         {
           if (ECONNREFUSED == errno || EADDRNOTAVAIL == errno)
             {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
               std::string msg = std::string("retry connect to ") + std::to_string(s);
+#else
+              std::string msg = std::string("retry connect to ") + to_string(s);
+#endif
               sleep(1);
             }
           else
@@ -312,7 +389,11 @@ int persistence_channel::start(RECV_CB cb, void* cb_param)
               close(s);
               perror("unable to connect");
               char buf[INET_ADDRSTRLEN];
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
               std::cerr << "errno " << std::to_string(errno) << " peer " << inet_ntop(AF_INET, &remote->sin_addr, buf, INET_ADDRSTRLEN) << ":" << std::to_string(ntohs(remote->sin_port)) << std::endl;
+#else
+              std::cerr << "errno " << to_string(errno) << " peer " << inet_ntop(AF_INET, &remote->sin_addr, buf, INET_ADDRSTRLEN) << ":" << to_string(ntohs(remote->sin_port)) << std::endl;
+#endif
               return -1;
             }
         }
@@ -324,8 +405,14 @@ int persistence_channel::start(RECV_CB cb, void* cb_param)
 int persistence_channel::stop()
 {
   sock_channel::stop();
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   for (auto s : send_sockets)
     {
+#else
+  for (int i = 0; i < send_sockets.size(); i++)
+    {
+      int s = send_sockets[i];
+#endif
       close(s);
     }
 }
@@ -362,14 +449,20 @@ void persistence_channel::monitor(sock_channel* const scp)
       FD_SET(cp->get_monitor_socket(), &fds);
 
       int max_sock = cp->get_monitor_socket();
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       for (int s : cp->recv_sockets)
-         {
-           if (s > max_sock)
-             {
-               max_sock = s;
-             }
-           FD_SET(s, &fds);
-         }
+        {
+#else
+      for (int i = 0; i < cp->recv_sockets.size(); i++)
+        {
+          int s = cp->recv_sockets[i];
+#endif
+          if (s > max_sock)
+            {
+              max_sock = s;
+            }
+          FD_SET(s, &fds);
+        }
 
       if (-1 == select(max_sock + 1, &fds, NULL, NULL, NULL))
         {
@@ -388,8 +481,14 @@ void persistence_channel::monitor(sock_channel* const scp)
           setnonblocking(s);
           cp->recv_sockets.push_back(s);
         }
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       for (int s : cp->recv_sockets)
         {
+#else
+      for (int i = 0; i < cp->recv_sockets.size(); i++)
+        {
+          int s = cp->recv_sockets[i];
+#endif
           if (FD_ISSET(s, &fds))
             {
               int data;

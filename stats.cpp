@@ -1,6 +1,20 @@
 #include <math.h>
 #include "stats.h"
 
+stats::stats()
+{
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+  pthread_mutex_init(&lock, NULL);
+#endif
+}
+
+stats::~stats()
+{
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+  pthread_mutex_destroy(&lock);
+#endif
+}
+
 void stats::reset()
 {
   sum = 0.0;
@@ -12,7 +26,11 @@ void stats::reset()
 
 void stats::process(double data, bool error)
 {
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   std::unique_lock<std::mutex> lck(lock);
+#else
+  pthread_mutex_lock(&lock);
+#endif
   if (error)
     {
       error_counter++;
@@ -27,6 +45,9 @@ void stats::process(double data, bool error)
         }
       counter++;
     }
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+  pthread_mutex_unlock(&lock);
+#endif
 }
 
 double stats::average()

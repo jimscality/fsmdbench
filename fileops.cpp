@@ -3,6 +3,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <assert.h>
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
+#include <errno.h>
+#endif
 #include "fileops.h"
 
 int
