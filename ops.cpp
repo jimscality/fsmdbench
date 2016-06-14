@@ -21,7 +21,7 @@ void timed_task::exec(int op_type, std::string *pathname, task_result& result)
   result.status_code = do_task(op_type, pathname);
   struct timespec t2;
   clock_gettime(CLOCK_MONOTONIC, &t2);
-  result.duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_nsec - t1.tv_nsec)/1000;
+  result.duration = (t2.tv_sec - t1.tv_sec)*1000000 + (t2.tv_nsec - t1.tv_nsec)/1000;
 #endif
 }
 
