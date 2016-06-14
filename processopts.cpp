@@ -116,9 +116,9 @@ process_opts(int argc, char **argv, std::vector<std::string>& addresses, int& lo
             break;
           case 'f':
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
-            num_dirs = std::stoi(std::string(optarg));
+            num_files = std::stoi(std::string(optarg));
 #else
-            num_dirs = stoi(std::string(optarg));
+            num_files = stoi(std::string(optarg));
 #endif
             break;
           case 'o':
