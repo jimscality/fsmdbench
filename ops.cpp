@@ -1,7 +1,7 @@
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
 #include <chrono>
 #else
-#include <sys/time.h>
+#include <time.h>
 #endif
 #include <assert.h>
 #include "ops.h"
@@ -16,12 +16,12 @@ void timed_task::exec(int op_type, std::string *pathname, task_result& result)
   std::chrono::microseconds delta = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1);
   result.duration = delta.count();
 #else
-  struct timeval t1;
-  gettimeofday(&t1, NULL);
+  struct timespec t1;
+  clock_gettime(CLOCK_MONOTONIC, &t1);
   result.status_code = do_task(op_type, pathname);
-  struct timeval t2;
-  gettimeofday(&t2, NULL);
-  result.duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec);
+  struct timespec t2;
+  clock_gettime(CLOCK_MONOTONIC, &t2);
+  result.duration = (t2.tv_sec - t1.tv_sec) + (t2.tv_nsec - t1.tv_nsec)/1000;
 #endif
 }
 

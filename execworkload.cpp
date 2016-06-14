@@ -67,21 +67,21 @@ void exec_workload::print_summary(int op, std::string object_type, stats& data)
 {
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
   std::cout << get_op_name(op) << " " << object_type << " result:" << std::endl
-            << "   throughput(ops/s):  " << std::to_string(data.ops()) << std::endl
+            << "   throughput(ops/s):  " << std::to_string(data.throughput()) << std::endl
             << "   latency (micro sec) " << std::endl
             << "              average: " << std::to_string(data.average()) << std::endl
             << "             variance: " << std::to_string(data.variance()) << std::endl
             << "              maximum: " << std::to_string(data.maxvalue()) << std::endl
-            << "   errors: " << std::to_string(data.errors()) << std::endl
+            << "   errors: " << std::to_string(data.errors()) << "/" << std::to_string(data.total()) << std::endl
             << std::endl;
 #else
   std::cout << get_op_name(op) << " " << object_type << " result:" << std::endl
-            << "   throughput(ops/s):  " << to_string(data.ops()) << std::endl
+            << "   throughput(ops/s):  " << to_string(data.throughput()) << std::endl
             << "   latency (micro sec) " << std::endl
             << "              average: " << to_string(data.average()) << std::endl
             << "             variance: " << to_string(data.variance()) << std::endl
             << "              maximum: " << to_string(data.maxvalue()) << std::endl
-            << "   errors: " << to_string(data.errors()) << std::endl
+            << "   errors: " << to_string(data.errors()) << "/" << to_string(data.total()) << std::endl
             << std::endl;
 #endif
 }

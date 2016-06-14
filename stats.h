@@ -20,7 +20,8 @@ class stats
     double average();
     double maxvalue();
     double variance();
-    double ops();
+    double throughput();
+    long total();
     long errors();
 
   private:

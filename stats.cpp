@@ -66,9 +66,14 @@ double stats::variance()
   return counter < 2 ? -1 : sqrt(sum2/counter - avg*avg);
 }
 
-double stats::ops()
+double stats::throughput()
 {
   return sum > 0.0 ? counter*1000000.0/sum : 0.0;
+}
+
+long stats::total()
+{
+  return counter;
 }
 
 long stats::errors()
