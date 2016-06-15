@@ -73,7 +73,7 @@ double stats::throughput()
 
 long stats::total()
 {
-  return counter;
+  return error_counter + counter;
 }
 
 long stats::errors()

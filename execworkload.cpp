@@ -19,7 +19,6 @@
 exec_workload::exec_workload(std::string top, int nl, std::vector<std::string> *addrs, int local_idx, int dirs, int files, int nclient, std::string out)
   : target_dir(top), nlevel(nl), addresses(addrs), local_index(local_idx), dirs_per_client(dirs), files_per_client(files), num_client_threads(nclient), output_path(out)
 {
-//  comm_channel = new conn_channel();
   comm_channel = new persistence_channel();
   comm_channel->init(local_idx, addrs);
   door = new barrier(2, num_client_threads*addresses->size(), comm_channel);
