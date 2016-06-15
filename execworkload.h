@@ -9,6 +9,7 @@
 #include "dirops.h"
 #include "fileops.h"
 #include "barrier.h"
+#include "namegen.h"
 
 #ifndef __EXECWORKLOAD_H
 #define __EXECWORKLOAD_H
@@ -21,10 +22,10 @@ class exec_workload {
     void exec_benchmark();
 
   private:
-    void handle_one(int op, timed_task *task, std::vector<std::string>& names, stats *data_handler);
-    void handle_one_dir(int op, std::vector<std::string>& names);
-    void handle_one_file(int op, std::vector<std::string>& names);
-    void measure_op_oneclient(int op, int initial_level, int incr, std::vector<name_set> *nameset, int client_thread_index);
+    void handle_one(int op, timed_task *task, const char* path, stats *data_handler);
+    static void handle_one_dir(int op, void *param, const char *path);
+    static void handle_one_file(int op, void *param, const char *path);
+    void measure_op_oneclient(int op, int initial_level, int incr, int client_thread_index, name_generator &namegen);
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
     static void bench_oneclient(exec_workload *ew, const int client_thread_index);
 #else

@@ -9,7 +9,7 @@
 #include "fileops.h"
 
 int
-file_op::do_task(int type, std::string *pathname)
+file_op::do_task(int type, const char *pathname)
 {
   switch(type)
     {
@@ -17,7 +17,7 @@ file_op::do_task(int type, std::string *pathname)
       case UPDATE:
         {
           int fd;
-          if (-1 == (fd = open(pathname->c_str(), O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH)))
+          if (-1 == (fd = open(pathname, O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH)))
             {
               return errno;
             }
@@ -29,7 +29,7 @@ file_op::do_task(int type, std::string *pathname)
         }
       case DELETE:
         {
-          if (-1 == unlink(pathname->c_str()))
+          if (-1 == unlink(pathname))
             {
               return errno;
             }

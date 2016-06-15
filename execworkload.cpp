@@ -13,7 +13,6 @@
 #endif
 #include "barrier.h"
 #include "nameset.h"
-#include "namegen.h"
 #include "processopts.h"
 #include "execworkload.h"
 
@@ -31,36 +30,6 @@ exec_workload::~exec_workload()
   delete door;
   comm_channel->destroy();
   delete comm_channel;
-}
-
-void exec_workload::handle_one_dir(int op, std::vector<std::string>& names)
-{
-  handle_one(op, &dop, names, &data_d);
-}
-
-void exec_workload::handle_one_file(int op, std::vector<std::string>& names)
-{
-  handle_one(op, &fop, names, &data_f);
-}
-
-void exec_workload::handle_one(int op, timed_task *task, std::vector<std::string>& names, stats *data_handler)
-{
-  task_result result;
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-  for (auto& dn : names)
-    {
-#else
-  for (int i = 0; i < names.size(); i++)
-    {
-      std::string& dn = names[i];
-#endif
-      task->exec(op, &dn, result);
-      data_handler->process((double)result.duration, result.status_code != 0);
-      if (data_file.is_open())
-        {
-          data_file << "op " << get_op_name(op) << " status " << result.status_code << " in " << result.duration << "(microsec) on " << dn << std::endl;
-        }
-    }
 }
 
 void exec_workload::print_summary(int op, std::string object_type, stats& data)
@@ -86,7 +55,30 @@ void exec_workload::print_summary(int op, std::string object_type, stats& data)
 #endif
 }
 
-void exec_workload::measure_op_oneclient(int op, int initial_level, int incr, std::vector<name_set> *nameset, int client_thread_index)
+void exec_workload::handle_one_dir(int op, void *param, const char *path)
+{
+  exec_workload *ew = (exec_workload*)param;
+  ew->handle_one(op, &ew->dop, path, &ew->data_d);
+}
+
+void exec_workload::handle_one_file(int op, void *param, const char *path)
+{
+  exec_workload *ew = (exec_workload*)param;
+  ew->handle_one(op, &ew->fop, path, &ew->data_f);
+}
+
+void exec_workload::handle_one(int op, timed_task *task, const char *path, stats *data_handler)
+{
+  task_result result;
+  task->exec(op, path, result);
+  data_handler->process((double)result.duration, result.status_code != 0);
+  if (data_file.is_open())
+    {
+      data_file << "op " << get_op_name(op) << " status " << result.status_code << " in " << result.duration << "(microsec) on " << path << std::endl;
+    }
+}
+
+void exec_workload::measure_op_oneclient(int op, int initial_level, int incr, int client_thread_index, name_generator &namegen)
 {
   if (0 == client_thread_index)
     {
@@ -96,8 +88,7 @@ void exec_workload::measure_op_oneclient(int op, int initial_level, int incr, st
   for (int l = initial_level; l >= 0 && l < nlevel; l += incr)
     {
       door->notify_and_wait(1);
-      handle_one_dir(op, (*nameset)[l].get_dir_names());
-      handle_one_file(op, (*nameset)[l].get_file_names());
+      namegen.act_on(l, handle_one_dir, handle_one_file, op, this, op, this);
       door->notify_and_wait(2);
     }
   if (0 == client_thread_index)
@@ -107,43 +98,23 @@ void exec_workload::measure_op_oneclient(int op, int initial_level, int incr, st
     }
 }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-void exec_workload::bench_oneclient(exec_workload *ew, const int client_thread_index)
-{
-#else
 void *exec_workload::bench_oneclient(void *td)
 {
   struct ew_tdata *etd = (struct ew_tdata *) td;
   exec_workload *ew = etd->ewp;
   const int client_thread_index = etd->client_idx;
   delete etd;
-#endif
+
   int client_index = ew->get_client_index(client_thread_index);
   int total_clients = ew->num_client_threads * ew->addresses->size();
 
-  name_generator namegen(ew->target_dir, std::string("d"), std::string("f"), client_index, total_clients, ew->nlevel, ew->dirs_per_client, ew->files_per_client);
-  std::vector<name_set> nameset(ew->nlevel);
-  for (int l = 0; l < ew->nlevel; l++)
-    {
-      if (0 != namegen.next_level(nameset[l]))
-        {
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-          return;
-#else
-          return 0;
-#endif
-        }
-    }
+  name_generator namegen(ew->target_dir, client_index, total_clients, ew->nlevel, ew->dirs_per_client, ew->files_per_client);
 
-  ew->measure_op_oneclient(CREATE, 0, 1, &nameset, client_thread_index);
-  ew->measure_op_oneclient(UPDATE, 0, 1, &nameset, client_thread_index);
-  ew->measure_op_oneclient(DELETE, ew->nlevel-1, -1, &nameset, client_thread_index);
+  ew->measure_op_oneclient(CREATE, 0, 1, client_thread_index, namegen);
+  ew->measure_op_oneclient(UPDATE, 0, 1, client_thread_index, namegen);
+  ew->measure_op_oneclient(DELETE, ew->nlevel-1, -1, client_thread_index, namegen);
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-  return;
-#else
   return 0;
-#endif
 }
 
 void exec_workload::exec_benchmark()

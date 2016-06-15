@@ -6,7 +6,7 @@
 #include <assert.h>
 #include "ops.h"
 
-void timed_task::exec(int op_type, std::string *pathname, task_result& result)
+void timed_task::exec(int op_type, const char *pathname, task_result& result)
 {
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
   std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();

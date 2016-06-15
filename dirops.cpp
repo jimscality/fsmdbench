@@ -6,13 +6,13 @@
 #include <errno.h>
 #include "dirops.h"
 
-int dir_op::do_task(int type, std::string *pathname)
+int dir_op::do_task(int type, const char *pathname)
 {
   switch (type)
     {
       case CREATE:
         {
-          if (-1 == mkdir(pathname->c_str(), S_IRWXU | S_IRWXG | S_IRWXO))
+          if (-1 == mkdir(pathname, S_IRWXU | S_IRWXG | S_IRWXO))
             {
               return errno;
             }
@@ -21,7 +21,7 @@ int dir_op::do_task(int type, std::string *pathname)
       case UPDATE:
         {
           int fd;
-          if (-1 == (fd = open(pathname->c_str(), O_DIRECTORY)))
+          if (-1 == (fd = open(pathname, O_DIRECTORY)))
             {
               return errno;
             }
@@ -33,7 +33,7 @@ int dir_op::do_task(int type, std::string *pathname)
         }
       case DELETE:
         {
-          if (-1 == rmdir(pathname->c_str()))
+          if (-1 == rmdir(pathname))
             {
               return errno;
             }

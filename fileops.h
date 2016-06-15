@@ -10,7 +10,7 @@ class file_op : public timed_task
 public:
 
 protected:
-  int do_task(int type, std::string *pathname);
+  int do_task(int type, const char *pathname);
 
 private:
 };
